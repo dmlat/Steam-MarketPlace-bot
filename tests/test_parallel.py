@@ -53,8 +53,16 @@ def test_effective_parallel_workers_no_proxies():
 
 
 @patch("steam_scanner.config.STEAM_PROXY_URLS", ["socks5://a", "socks5://b", "socks5://c"])
-@patch("steam_scanner.config.STEAM_PARALLEL_WORKERS", 0)
-def test_effective_parallel_workers_auto():
+@patch("steam_scanner.config.STEAM_PARALLEL_WORKERS", 3)
+def test_effective_parallel_workers_when_enabled():
     from steam_scanner.config import effective_parallel_workers
 
     assert effective_parallel_workers() == 3
+
+
+@patch("steam_scanner.config.STEAM_PROXY_URLS", ["socks5://a", "socks5://b", "socks5://c"])
+@patch("steam_scanner.config.STEAM_PARALLEL_WORKERS", 1)
+def test_effective_parallel_workers_sequential_default():
+    from steam_scanner.config import effective_parallel_workers
+
+    assert effective_parallel_workers() == 1

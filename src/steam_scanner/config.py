@@ -16,7 +16,7 @@ EXCLUDED_APPIDS: frozenset[int] = frozenset({730, 440, 570, 252490})
 MARKET_COMMUNITY_APPID = 753
 
 STEAM_REQUEST_INTERVAL = float(os.getenv("STEAM_REQUEST_INTERVAL", "8.0"))
-STEAM_INTERVAL_PRICE = float(os.getenv("STEAM_INTERVAL_PRICE", "10.0"))
+STEAM_INTERVAL_PRICE = float(os.getenv("STEAM_INTERVAL_PRICE", "8.0"))
 STEAM_INTERVAL_SEARCH = float(os.getenv("STEAM_INTERVAL_SEARCH", "15.0"))
 STEAM_INTERVAL_LISTING = float(os.getenv("STEAM_INTERVAL_LISTING", "25.0"))
 STEAM_INTERVAL_ORDERBOOK = float(os.getenv("STEAM_INTERVAL_ORDERBOOK", "35.0"))
@@ -42,15 +42,14 @@ def _parse_proxy_urls(raw: str) -> list[str]:
 
 
 STEAM_PROXY_URLS: list[str] = _parse_proxy_urls(os.getenv("STEAM_PROXY_URLS", ""))
-STEAM_PARALLEL_WORKERS = int(os.getenv("STEAM_PARALLEL_WORKERS", "0"))
+STEAM_PARALLEL_WORKERS = int(os.getenv("STEAM_PARALLEL_WORKERS", "1"))
 
 
 def effective_parallel_workers() -> int:
-    """Parallel lanes: 1 without proxies, else clamp STEAM_PARALLEL_WORKERS to proxy count."""
+    """Parallel lanes; default 1 (sequential round-robin). Set >1 to enable parallel mode."""
     if not STEAM_PROXY_URLS:
         return 1
-    raw = STEAM_PARALLEL_WORKERS if STEAM_PARALLEL_WORKERS > 0 else len(STEAM_PROXY_URLS)
-    return max(1, min(raw, len(STEAM_PROXY_URLS)))
+    return max(1, min(STEAM_PARALLEL_WORKERS, len(STEAM_PROXY_URLS)))
 
 
 def interval_for_endpoint(endpoint: SteamEndpoint) -> float:
