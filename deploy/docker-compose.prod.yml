@@ -1,0 +1,21 @@
+services:
+  postgres:
+    image: postgres:16
+    container_name: steam_scanner_db
+    restart: unless-stopped
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5436}:5432"
+    environment:
+      POSTGRES_DB: steam_scanner
+      POSTGRES_USER: scanner
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    volumes:
+      - steam_scanner_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U scanner -d steam_scanner"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+volumes:
+  steam_scanner_pgdata:

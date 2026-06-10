@@ -1,0 +1,15 @@
+[Unit]
+Description=Steam Market Research Scanner collector
+After=network.target docker.service
+Wants=docker.service
+
+[Service]
+Type=simple
+WorkingDirectory=/root/Steam-MarketPlace-bot
+Environment=PYTHONIOENCODING=utf-8
+ExecStart=/bin/bash -lc 'mkdir -p logs && while true; do .venv/bin/python scripts/run_continue.py 8000 >> logs/continue.log 2>&1 || ec=$?; if [ "${ec:-0}" -eq 2 ]; then echo "Paused (rate limit/network), sleep 6h" >> logs/continue.log; sleep 21600; else sleep 300; fi; done'
+Restart=always
+RestartSec=30
+
+[Install]
+WantedBy=multi-user.target

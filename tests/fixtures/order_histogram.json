@@ -1,0 +1,7 @@
+{
+  "success": 1,
+  "buy_order_graph": [[0.14, 5, 5], [0.13, 10, 15]],
+  "sell_order_graph": [[0.16, 3, 3], [0.17, 8, 11]],
+  "buy_order_summary": "15 buy orders",
+  "sell_order_summary": "11 sell listings"
+}

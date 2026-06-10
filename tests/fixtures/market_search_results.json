@@ -1,0 +1,18 @@
+[
+  {
+    "name": "Sack of Gems",
+    "hash_name": "753-Sack of Gems",
+    "sell_listings": 18911,
+    "sell_price": 73,
+    "sell_price_text": "$0.73",
+    "app_name": "Steam",
+    "asset_description": {
+      "appid": 753,
+      "market_hash_name": "753-Sack of Gems",
+      "name": "Sack of Gems",
+      "type": "Steam Gems",
+      "tradable": 1,
+      "commodity": 1
+    }
+  }
+]
