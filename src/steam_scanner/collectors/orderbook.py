@@ -12,6 +12,7 @@ from steam_scanner.db.session import get_session
 from steam_scanner.collectors.listing_parser import ListingParser
 from steam_scanner.steam.endpoint_kind import SteamEndpoint
 from steam_scanner.steam.client import STEAM_CLIENT_ABORT_ERRORS, SteamClient
+from steam_scanner.steam.parallel import ParallelSteamClient, run_parallel_lanes
 from steam_scanner.steam.endpoints import item_orders_histogram
 from steam_scanner.steam.parsers import parse_order_histogram
 
@@ -21,9 +22,18 @@ logger = logging.getLogger(__name__)
 
 
 class OrderBookCollector:
-    def __init__(self, client: SteamClient | None = None):
+    def __init__(self, client: SteamClient | ParallelSteamClient | None = None):
         self.client = client or SteamClient()
-        self.listing_parser = ListingParser(client=self.client)
+        lane = client.lanes[0] if isinstance(client, ParallelSteamClient) else self.client
+        self.listing_parser = ListingParser(client=lane)
+
+    def _collect_one(self, client: SteamClient, item_id: int) -> bool:
+        with get_session() as session:
+            db_item = session.get(MarketItem, item_id)
+            if not db_item:
+                return False
+            lane_collector = OrderBookCollector(client=client)
+            return lane_collector.collect_for_item(db_item) is not None
 
     def collect_for_item(self, item: MarketItem) -> OrderbookSnapshot | None:
         if not item.item_nameid:
@@ -78,6 +88,16 @@ class OrderBookCollector:
         total = len(ids)
         progress = ProgressTracker("Orderbook scan", total, log_every_pct=2.0)
         logger.info("Orderbook scan: %d items queued (~2 req/item)", total)
+
+        if isinstance(self.client, ParallelSteamClient):
+            return run_parallel_lanes(
+                ids,
+                self.client.lanes,
+                self._collect_one,
+                label="Orderbook scan",
+                log_every_pct=2.0,
+                request_cap=self.client.request_cap,
+            )
 
         for idx, item_id in enumerate(ids, 1):
             try:

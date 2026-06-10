@@ -13,6 +13,7 @@ from steam_scanner.db.models import MarketItem, PriceSnapshot
 from steam_scanner.db.session import get_session
 from steam_scanner.steam.endpoint_kind import SteamEndpoint
 from steam_scanner.steam.client import STEAM_CLIENT_ABORT_ERRORS, SteamClient
+from steam_scanner.steam.parallel import ParallelSteamClient, run_parallel_lanes
 from steam_scanner.steam.endpoints import price_overview
 from steam_scanner.progress import ProgressTracker, log_budget
 from steam_scanner.steam.parsers import parse_price_overview
@@ -21,8 +22,37 @@ logger = logging.getLogger(__name__)
 
 
 class PriceOverviewCollector:
-    def __init__(self, client: SteamClient | None = None):
+    def __init__(self, client: SteamClient | ParallelSteamClient | None = None):
         self.client = client or SteamClient()
+
+    def _scan_one(self, client: SteamClient, item_id: int, currency_code: str) -> bool:
+        with get_session() as session:
+            item = session.get(MarketItem, item_id)
+            if not item:
+                return False
+            cfg = CURRENCIES.get(currency_code, PRIMARY_CURRENCY)
+            url = price_overview(
+                market_hash_name=item.market_hash_name,
+                appid=item.market_appid,
+                currency=cfg.steam_id,
+                country=cfg.country,
+            )
+            raw = client.get_json(url, endpoint=SteamEndpoint.PRICE)
+            parsed = parse_price_overview(raw)
+            if not parsed.get("success") and not parsed.get("lowest_price"):
+                return False
+            snap = PriceSnapshot(
+                market_item_id=item.id,
+                currency_code=currency_code,
+                country_code=cfg.country,
+                lowest_price=float(parsed["lowest_price"]) if parsed["lowest_price"] else None,
+                median_price=float(parsed["median_price"]) if parsed["median_price"] else None,
+                volume=parsed["volume"],
+                raw_response=raw,
+                captured_at=datetime.utcnow(),
+            )
+            session.add(snap)
+            return True
 
     @staticmethod
     def _queue_item_ids(
@@ -128,35 +158,24 @@ class PriceOverviewCollector:
         total = len(item_ids)
         progress = ProgressTracker("Price scan", total, log_every_pct=2.0)
 
+        if isinstance(self.client, ParallelSteamClient):
+            return run_parallel_lanes(
+                item_ids,
+                self.client.lanes,
+                lambda c, iid: self._scan_one(c, iid, currency_code),
+                label="Price scan",
+                log_every_pct=2.0,
+                request_cap=self.client.request_cap,
+            )
+
         for i in range(0, len(item_ids), batch_size):
             batch = item_ids[i : i + batch_size]
             with get_session() as session:
                 items = session.query(MarketItem).filter(MarketItem.id.in_(batch)).all()
                 for item in items:
                     try:
-                        cfg = CURRENCIES.get(currency_code, PRIMARY_CURRENCY)
-                        url = price_overview(
-                            market_hash_name=item.market_hash_name,
-                            appid=item.market_appid,
-                            currency=cfg.steam_id,
-                            country=cfg.country,
-                        )
-                        raw = self.client.get_json(url, endpoint=SteamEndpoint.PRICE)
-                        parsed = parse_price_overview(raw)
-                        if not parsed.get("success") and not parsed.get("lowest_price"):
-                            continue
-                        snap = PriceSnapshot(
-                            market_item_id=item.id,
-                            currency_code=currency_code,
-                            country_code=cfg.country,
-                            lowest_price=float(parsed["lowest_price"]) if parsed["lowest_price"] else None,
-                            median_price=float(parsed["median_price"]) if parsed["median_price"] else None,
-                            volume=parsed["volume"],
-                            raw_response=raw,
-                            captured_at=datetime.utcnow(),
-                        )
-                        session.add(snap)
-                        count += 1
+                        if self._scan_one(self.client, item.id, currency_code):
+                            count += 1
                     except STEAM_CLIENT_ABORT_ERRORS:
                         raise
                     except Exception as exc:

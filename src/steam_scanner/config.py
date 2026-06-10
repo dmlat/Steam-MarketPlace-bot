@@ -42,6 +42,15 @@ def _parse_proxy_urls(raw: str) -> list[str]:
 
 
 STEAM_PROXY_URLS: list[str] = _parse_proxy_urls(os.getenv("STEAM_PROXY_URLS", ""))
+STEAM_PARALLEL_WORKERS = int(os.getenv("STEAM_PARALLEL_WORKERS", "0"))
+
+
+def effective_parallel_workers() -> int:
+    """Parallel lanes: 1 without proxies, else clamp STEAM_PARALLEL_WORKERS to proxy count."""
+    if not STEAM_PROXY_URLS:
+        return 1
+    raw = STEAM_PARALLEL_WORKERS if STEAM_PARALLEL_WORKERS > 0 else len(STEAM_PROXY_URLS)
+    return max(1, min(raw, len(STEAM_PROXY_URLS)))
 
 
 def interval_for_endpoint(endpoint: SteamEndpoint) -> float:

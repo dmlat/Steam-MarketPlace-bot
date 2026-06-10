@@ -75,12 +75,16 @@ class SteamClient:
         interval: float | None = None,
         max_retries: int | None = None,
         request_cap: int | None = None,
+        fixed_proxy_url: str | None = None,
+        lane_id: int | None = None,
     ):
         ComplianceGuard.check_environment()
         self.base_interval = interval or STEAM_REQUEST_INTERVAL
         self.interval = self.base_interval
         self.max_retries = max_retries or STEAM_MAX_RETRIES
         self.request_cap = request_cap or STEAM_NIGHTLY_REQUEST_CAP
+        self.fixed_proxy_url = fixed_proxy_url
+        self.lane_id = lane_id
         self.requests_made = 0
         self.throttled_count = 0
         self.network_retries = 0
@@ -91,7 +95,10 @@ class SteamClient:
         self._proxy_pool: ProxyPool | None = None
         self._proxy_idx: int | None = None
         self._proxy_url: str | None = None
-        if STEAM_PROXY_URLS:
+        if fixed_proxy_url:
+            self._proxy_url = fixed_proxy_url
+            self._proxy_idx = lane_id if lane_id is not None else 0
+        elif STEAM_PROXY_URLS:
             self._proxy_pool = ProxyPool(
                 STEAM_PROXY_URLS,
                 max_429_per_proxy=STEAM_PROXY_MAX_429,
@@ -274,7 +281,9 @@ class SteamClient:
             )
         elif self._success_streak > 0 and self._success_streak % 50 == 0:
             proxy_note = ""
-            if self._proxy_pool and self._proxy_idx is not None:
+            if self.fixed_proxy_url and self.lane_id is not None:
+                proxy_note = f", lane={self.lane_id + 1}"
+            elif self._proxy_pool and self._proxy_idx is not None:
                 proxy_note = f", proxy={self._proxy_idx + 1}/{self._proxy_pool.size}"
             logger.info(
                 "Rate limit OK: %d requests, interval=%.1fs, throttled=%d%s",

@@ -11,6 +11,7 @@ from steam_scanner.collectors.price_overview import PriceOverviewCollector
 from steam_scanner.db.models import CurrencyAnalysis, MarketItem
 from steam_scanner.db.session import get_session
 from steam_scanner.steam.client import STEAM_CLIENT_ABORT_ERRORS, SteamClient
+from steam_scanner.steam.parallel import ParallelSteamClient, run_parallel_lanes
 
 logger = logging.getLogger(__name__)
 
@@ -27,9 +28,18 @@ ANOMALY_THRESHOLD_PCT = Decimal("15")
 
 
 class CurrencyAnalyzer:
-    def __init__(self, client: SteamClient | None = None):
+    def __init__(self, client: SteamClient | ParallelSteamClient | None = None):
         self.client = client or SteamClient()
-        self.price_collector = PriceOverviewCollector(client=self.client)
+        lane = client.lanes[0] if isinstance(client, ParallelSteamClient) else self.client
+        self.price_collector = PriceOverviewCollector(client=lane)
+
+    def _analyze_one(self, client: SteamClient, item_id: int) -> bool:
+        with get_session() as session:
+            db_item = session.get(MarketItem, item_id)
+            if not db_item:
+                return False
+            lane_analyzer = CurrencyAnalyzer(client=client)
+            return lane_analyzer.analyze_item(db_item) is not None
 
     def analyze_item(self, item: MarketItem) -> CurrencyAnalysis | None:
         prices: dict[str, Decimal | None] = {}
@@ -88,6 +98,16 @@ class CurrencyAnalyzer:
 
         progress = ProgressTracker("Currency scan", len(ids), log_every_pct=5.0)
         logger.info("Currency scan: %d items x %d currencies", len(ids), len(CURRENCIES))
+
+        if isinstance(self.client, ParallelSteamClient):
+            return run_parallel_lanes(
+                ids,
+                self.client.lanes,
+                self._analyze_one,
+                label="Currency scan",
+                log_every_pct=5.0,
+                request_cap=self.client.request_cap,
+            )
 
         for idx, item_id in enumerate(ids, 1):
             try:

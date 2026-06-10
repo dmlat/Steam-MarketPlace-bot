@@ -19,7 +19,8 @@ from steam_scanner.db.session import get_session
 from steam_scanner.export.csv_export import export_all
 from steam_scanner.log_setup import configure_logging
 from steam_scanner.progress import pct, log_budget
-from steam_scanner.steam.client import SteamClient, RequestBudgetExceeded, RateLimitCircuitOpenError
+from steam_scanner.steam.client import RequestBudgetExceeded, RateLimitCircuitOpenError
+from steam_scanner.steam.parallel import make_http_client
 
 configure_logging()
 
@@ -42,7 +43,7 @@ STAGES = [
 class PipelineRunner:
     def __init__(self, resume: bool = False, request_cap: int | None = None):
         self.resume = resume
-        self.client = SteamClient(request_cap=request_cap or STEAM_NIGHTLY_REQUEST_CAP)
+        self.client = make_http_client(request_cap=request_cap or STEAM_NIGHTLY_REQUEST_CAP)
         self.run_id: int | None = None
 
     def _start_stage(self, stage: str) -> PipelineRun:
