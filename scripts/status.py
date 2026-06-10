@@ -56,6 +56,8 @@ def main() -> int:
             .order_by(PipelineRun.id.desc())
             .first()
         )
+        run_stage = run.stage if run else None
+        run_started = run.started_at if run else None
 
     log_path = ROOT / "logs" / "continue.log"
     last_log = ""
@@ -69,8 +71,8 @@ def main() -> int:
     print(f"Items: {items} | Price snapshots: {prices} | Unique priced: {priced}")
     print(f"New snapshots ({args.minutes}m): {recent}")
     print(f"Last snapshot: {last_snap}")
-    if run:
-        print(f"Pipeline stage: {run.stage} (running since {run.started_at})")
+    if run_stage:
+        print(f"Pipeline stage: {run_stage} (running since {run_started})")
     print(f"Proxies configured: {len(STEAM_PROXY_URLS)}")
     for i, u in enumerate(STEAM_PROXY_URLS, 1):
         print(f"  proxy {i}: {mask_proxy_url(u)}")

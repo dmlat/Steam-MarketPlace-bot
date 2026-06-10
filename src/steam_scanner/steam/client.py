@@ -106,15 +106,21 @@ class SteamClient:
         self._client = self._make_http_client()
 
     def _make_http_client(self) -> httpx.Client:
-        return httpx.Client(
-            headers={"User-Agent": USER_AGENT},
-            timeout=httpx.Timeout(30.0, connect=15.0),
-            follow_redirects=True,
-        )
+        kwargs: dict[str, Any] = {
+            "headers": {"User-Agent": USER_AGENT},
+            "timeout": httpx.Timeout(30.0, connect=15.0),
+            "follow_redirects": True,
+        }
+        if self._proxy_url:
+            kwargs["proxy"] = self._proxy_url
+        return httpx.Client(**kwargs)
 
     def _pick_proxy(self) -> None:
         if self._proxy_pool:
-            self._proxy_idx, self._proxy_url = self._proxy_pool.current()
+            idx, url = self._proxy_pool.current()
+            if url != self._proxy_url or idx != self._proxy_idx:
+                self._proxy_idx, self._proxy_url = idx, url
+                self._reset_http_client()
 
     def _rotate_proxy(self, reason: str) -> float:
         assert self._proxy_pool is not None
@@ -127,6 +133,7 @@ class SteamClient:
             )
         prev = self._proxy_idx
         self._proxy_idx, self._proxy_url = self._proxy_pool.rotate()
+        self._reset_http_client()
         self._consecutive_429 = 0
         self._backoff_multiplier = 1.0
         self.interval = self.base_interval
@@ -283,10 +290,7 @@ class SteamClient:
 
         while True:
             try:
-                request_kwargs: dict[str, Any] = {}
-                if self._proxy_url:
-                    request_kwargs["proxy"] = self._proxy_url
-                response = self._client.get(url, cookies=cookies, **request_kwargs)
+                response = self._client.get(url, cookies=cookies)
                 self._last_request_at = time.monotonic()
                 return response
             except NETWORK_ERRORS as exc:

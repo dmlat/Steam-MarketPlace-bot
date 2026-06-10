@@ -89,13 +89,10 @@ class CurrencyAnalyzer:
         progress = ProgressTracker("Currency scan", len(ids), log_every_pct=5.0)
         logger.info("Currency scan: %d items x %d currencies", len(ids), len(CURRENCIES))
 
-        with get_session() as session:
-            items = session.query(MarketItem).filter(MarketItem.id.in_(ids)).all()
-
-        for idx, item in enumerate(items, 1):
+        for idx, item_id in enumerate(ids, 1):
             try:
                 with get_session() as session:
-                    db_item = session.get(MarketItem, item.id)
+                    db_item = session.get(MarketItem, item_id)
                     if db_item:
                         result = self.analyze_item(db_item)
                         if result:
@@ -106,7 +103,7 @@ class CurrencyAnalyzer:
             except STEAM_CLIENT_ABORT_ERRORS:
                 raise
             except Exception as exc:
-                logger.warning("Currency analysis failed for %d: %s", item.id, exc)
+                logger.warning("Currency analysis failed for %d: %s", item_id, exc)
 
         progress.finish(extra=f"analyzed={count}")
         return count

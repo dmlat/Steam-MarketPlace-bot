@@ -23,7 +23,9 @@ class FeeResult(NamedTuple):
     minimum_profitable_sell_price: Decimal
 
 
-def _to_cents(amount: Decimal) -> int:
+def _to_cents(amount: Decimal | float | int) -> int:
+    if not isinstance(amount, Decimal):
+        amount = Decimal(str(amount))
     return int((amount * 100).quantize(Decimal("1"), rounding=ROUND_HALF_UP))
 
 

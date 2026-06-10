@@ -79,14 +79,10 @@ class OrderBookCollector:
         progress = ProgressTracker("Orderbook scan", total, log_every_pct=2.0)
         logger.info("Orderbook scan: %d items queued (~2 req/item)", total)
 
-        with get_session() as session:
-            items = session.query(MarketItem).filter(MarketItem.id.in_(ids)).all()
-            item_refs = list(items)
-
-        for idx, item in enumerate(item_refs, 1):
+        for idx, item_id in enumerate(ids, 1):
             try:
                 with get_session() as session:
-                    db_item = session.get(MarketItem, item.id)
+                    db_item = session.get(MarketItem, item_id)
                     if not db_item:
                         continue
                     result = self.collect_for_item(db_item)
@@ -101,7 +97,7 @@ class OrderBookCollector:
             except STEAM_CLIENT_ABORT_ERRORS:
                 raise
             except Exception as exc:
-                logger.warning("Orderbook failed for item %d: %s", item.id, exc)
+                logger.warning("Orderbook failed for item %d: %s", item_id, exc)
 
         progress.finish(extra=f"collected={count}")
         return count
